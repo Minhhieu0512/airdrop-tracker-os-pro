@@ -27,9 +27,17 @@ app.get('/api/news', async (_req,res) => {
     const r = await fetch('https://www.coindesk.com/arc/outboundfeeds/rss/');
     if (!r.ok) throw new Error(`RSS ${r.status}`);
     const xml = await r.text();
-    const items = [...xml.matchAll(/<item>([\\s\\S]*?)<\\/item>/g)].slice(0,8).map(m => {
-      const t = (tag) => (m[1].match(new RegExp(`<${tag}[^>]*>([\\\\s\\\\S]*?)<\\\\/${tag}>`))?.[1] || '').replace(/<!\\[CDATA\\[|\\]\\]>/g,'').replace(/&amp;/g,'&');
-      return {title:t('title'),link:t('link'),pubDate:t('pubDate'),description:t('description').replace(/<[^>]+>/g,'').slice(0,220)};
+    const blocks = xml.split('<item>').slice(1).map(part => part.split('</item>')[0]).slice(0,8);
+    const items = blocks.map(item => {
+      const tag = name => {
+        const start = item.indexOf('<' + name + '>');
+        if (start < 0) return '';
+        const bodyStart = start + name.length + 2;
+        const end = item.indexOf('</' + name + '>', bodyStart);
+        if (end < 0) return '';
+        return item.slice(bodyStart,end).replace('<![CDATA[','').replace(']]>','').replace(/&amp;/g,'&');
+      };
+      return {title:tag('title'),link:tag('link'),pubDate:tag('pubDate'),description:tag('description').replace(/<[^>]*>/g,'').slice(0,220)};
     });
     res.json(items);
   } catch(e) { res.status(502).json({error:'News feed temporarily unavailable',detail:e.message}); }
